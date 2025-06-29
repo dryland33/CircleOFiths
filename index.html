@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circle of Fifths with Demo</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #000;
+            font-family: Arial, sans-serif;
+            touch-action: manipulation;
+            color: white;
+        }
+        
+        .controls {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+        
+        select, button {
+            padding: 8px;
+            border-radius: 4px;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+        }
+        
+        select {
+            width: 200px;
+        }
+        
+        button {
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        button:hover {
+            background: #444;
+        }
+        
+        .color-wheel {
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: conic-gradient(
+                from -15deg,
+                #FE2712 0deg 30deg,      /* C/Do */
+                #FC600A 30deg 60deg,     /* G/So */
+                #FB9902 60deg 90deg,     /* D/Re */
+                #FCCC1A 90deg 120deg,    /* A/La */
+                #FEFE33 120deg 150deg,   /* E/Mi */
+                #B2D732 150deg 180deg,   /* B/Ti */
+                #66B032 180deg 210deg,   /* F#/Fi or G♭/Se */
+                #347C98 210deg 240deg,   /* C#/Di or D♭/Ra */
+                #0247FE 240deg 270deg,   /* G#/Si or A♭/Le */
+                #4424D6 270deg 300deg,   /* D#/Ri or E♭/Me */
+                #8601AF 300deg 330deg,   /* A#/Li or B♭/Te */
+                #C21460 330deg 360deg    /* F/Fa */
+            );
+            position: relative;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .color-wheel::before {
+            content: "";
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            background: #222;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border: 1px solid #444;
+            z-index: 1;
+        }
+
+        .label {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 2;
+            --radius: 110px;
+            --angle: calc(var(--i) * 30deg);
+            --x: calc(50% + var(--radius) * sin(var(--angle)));
+            --y: calc(50% - var(--radius) * cos(var(--angle)));
+            left: var(--x);
+            top: var(--y);
+            transform: translate(-50%, -50%);
+            color: white;
+            text-shadow: 0 0 3px black;
+            pointer-events: none;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .label.highlight {
+            transform: translate(-50%, -50%) scale(1.3);
+            box-shadow: 0 0 15px white;
+            z-index: 3;
+        }
+
+        h1 {
+            color: white;
+            margin-top: 20px;
+            text-align: center;
+            width: 100%;
+        }
+
+        .note-display {
+            margin-top: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            height: 30px;
+            text-align: center;
+            transition: color 0.2s;
+        }
+
+        .octave-display {
+            font-size: 14px;
+            text-align: center;
+            margin-top: 5px;
+            line-height: 1.4;
+            max-width: 300px;
+            transition: color 0.2s;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <button id="demoButton">Demo C Major Scale</button>
+        <select id="notationSelector">
+            <option value="sharps">Sharps (F♯, C♯, etc.)</option>
+            <option value="flats">Flats (G♭, D♭, etc.)</option>
+            <option value="solfeggeUp">Solfège Up (Do, Fi, Di, etc.)</option>
+            <option value="solfeggeDown">Solfège Down (Do, Se, Ra, etc.)</option>
+        </select>
+    </div>
+
+    <div class="color-wheel" id="wheel">
+        <div class="label" style="--i: 0">C</div>
+        <div class="label" style="--i: 1">G</div>
+        <div class="label" style="--i: 2">D</div>
+        <div class="label" style="--i: 3">A</div>
+        <div class="label" style="--i: 4">E</div>
+        <div class="label" style="--i: 5">B</div>
+        <div class="label" style="--i: 6">F♯</div>
+        <div class="label" style="--i: 7">C♯</div>
+        <div class="label" style="--i: 8">G♯</div>
+        <div class="label" style="--i: 9">D♯</div>
+        <div class="label" style="--i: 10">A♯</div>
+        <div class="label" style="--i: 11">F</div>
+    </div>
+    <div class="note-display" id="noteDisplay">Touch a segment</div>
+    <div class="octave-display" id="octaveDisplay"></div>
+    <h1>Circle of Fifths</h1>
+
+    <script>
+        // Initialize Web Audio
+        let audioCtx;
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+            document.getElementById('noteDisplay').textContent = "Audio not supported";
+        }
+
+        // Note data with all notation systems
+        const noteMap = [
+            { name: "C",  sharp: "C",  flat: "C",  
+              solfeggeUp: "Do", solfeggeDown: "Do", color: "#FE2712", 
+              freq: [32.70, 65.41, 130.81, 261.63, 523.25, 1046.50, 2093.00, 4186.01] },
+            { name: "G",  sharp: "G",  flat: "G",  
+              solfeggeUp: "So", solfeggeDown: "So", color: "#FC600A", 
+              freq: [24.50, 49.00, 98.00, 196.00, 392.00, 784.00, 1568.00, 3136.00] },
+            { name: "D",  sharp: "D",  flat: "D",  
+              solfeggeUp: "Re", solfeggeDown: "Re", color: "#FB9902", 
+              freq: [18.35, 36.71, 73.42, 146.83, 293.66, 587.33, 1174.66, 2349.32] },
+            { name: "A",  sharp: "A",  flat: "A",  
+              solfeggeUp: "La", solfeggeDown: "La", color: "#FCCC1A", 
+              freq: [27.50, 55.00, 110.00, 220.00, 440.00, 880.00, 1760.00, 3520.00] },
+            { name: "E",  sharp: "E",  flat: "E",  
+              solfeggeUp: "Mi", solfeggeDown: "Mi", color: "#FEFE33", 
+              freq: [20.60, 41.20, 82.41, 164.81, 329.63, 659.26, 1318.51, 2637.02] },
+            { name: "B",  sharp: "B",  flat: "B",  
+              solfeggeUp: "Ti", solfeggeDown: "Ti", color: "#B2D732", 
+              freq: [30.87, 61.74, 123.47, 246.94, 493.88, 987.77, 1975.53, 3951.07] },
+            { name: "F#", sharp: "F♯", flat: "G♭", 
+              solfeggeUp: "Fi", solfeggeDown: "Se", color: "#66B032", 
+              freq: [23.12, 46.25, 92.50, 185.00, 369.99, 739.99, 1479.98, 2959.96] },
+            { name: "C#", sharp: "C♯", flat: "D♭", 
+              solfeggeUp: "Di", solfeggeDown: "Ra", color: "#347C98", 
+              freq: [17.32, 34.65, 69.30, 138.59, 277.18, 554.37, 1108.73, 2217.46] },
+            { name: "G#", sharp: "G♯", flat: "A♭", 
+              solfeggeUp: "Si", solfeggeDown: "Le", color: "#0247FE", 
+              freq: [25.96, 51.91, 103.83, 207.65, 415.30, 830.61, 1661.22, 3322.44] },
+            { name: "D#", sharp: "D♯", flat: "E♭", 
+              solfeggeUp: "Ri", solfeggeDown: "Me", color: "#4424D6", 
+              freq: [19.45, 38.89, 77.78, 155.56, 311.13, 622.25, 1244.51, 2489.02] },
+            { name: "A#", sharp: "A♯", flat: "B♭", 
+              solfeggeUp: "Li", solfeggeDown: "Te", color: "#8601AF", 
+              freq: [29.14, 58.27, 116.54, 233.08, 466.16, 932.33, 1864.66, 3729.31] },
+            { name: "F",  sharp: "F",  flat: "F",  
+              solfeggeUp: "Fa", solfeggeDown: "Fa", color: "#C21460", 
+              freq: [21.83, 43.65, 87.31, 174.61, 349.23, 698.46, 1396.91, 2793.83] }
+        ];
+
+        const octaveNames = ["₁", "₂", "₃", "₄", "₅", "₆", "₇", "₈"];
+        const labels = document.querySelectorAll('.label');
+
+        // Update labels based on notation selection
+        function updateLabels(notation) {
+            labels.forEach((label, i) => {
+                const note = noteMap[i];
+                switch(notation) {
+                    case 'sharps': label.textContent = note.sharp; break;
+                    case 'flats': label.textContent = note.flat; break;
+                    case 'solfeggeUp': label.textContent = note.solfeggeUp; break;
+                    case 'solfeggeDown': label.textContent = note.solfeggeDown; break;
+                }
+            });
+        }
+
+        // Play a single note with visual feedback
+        function playNoteWithVisual(segmentIndex) {
+            if (!audioCtx) return;
+            
+            // Highlight the label
+            const label = labels[segmentIndex];
+            label.classList.add('highlight');
+            
+            // Play the sound
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            
+            // Stop any current sounds
+            if (window.currentOscillators) {
+                window.currentOscillators.forEach(osc => {
+                    try { osc.stop(); } catch(e) {}
+                });
+            }
+            
+            const note = noteMap[segmentIndex];
+            const oscillators = [];
+            
+            // Create oscillators (skip ultra-low frequencies)
+            note.freq.forEach((freq, i) => {
+                if (freq < 20) return;
+                
+                try {
+                    const oscillator = audioCtx.createOscillator();
+                    oscillator.type = 'sine';
+                    oscillator.frequency.value = freq;
+                    
+                    const gainNode = audioCtx.createGain();
+                    gainNode.gain.value = [0.2, 0.3, 0.4, 0.5, 0.4, 0.3, 0.2, 0.1][i];
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    
+                    oscillator.start();
+                    oscillators.push(oscillator);
+                } catch(e) {
+                    console.warn("Couldn't create oscillator for", freq, "Hz:", e);
+                }
+            });
+            
+            window.currentOscillators = oscillators;
+            
+            // Update display
+            const notation = document.getElementById('notationSelector').value;
+            let displayName;
+            switch(notation) {
+                case 'sharps': displayName = note.sharp; break;
+                case 'flats': displayName = note.flat; break;
+                case 'solfeggeUp': displayName = note.solfeggeUp; break;
+                case 'solfeggeDown': displayName = note.solfeggeDown; break;
+            }
+            
+            document.getElementById('noteDisplay').textContent = displayName;
+            document.getElementById('noteDisplay').style.color = note.color;
+            document.getElementById('octaveDisplay').style.color = note.color;
+            document.getElementById('octaveDisplay').innerHTML = 
+                note.freq.map((freq, i) => 
+                    `${displayName}${octaveNames[i]} (${Math.round(freq)}Hz)`
+                ).join(' • ');
+            
+            // Remove highlight after 0.7 seconds (before next note plays)
+            setTimeout(() => {
+                label.classList.remove('highlight');
+            }, 700);
+            
+            // Auto-stop after 2 seconds
+            setTimeout(() => {
+                oscillators.forEach(osc => {
+                    try { osc.stop(); } catch(e) {}
+                });
+            }, 2000);
+        }
+
+        // Play C major scale demo (C-D-E-F-G-A-B-C)
+        function playCMajorScaleDemo() {
+            const demoButton = document.getElementById('demoButton');
+            demoButton.disabled = true;
+            demoButton.textContent = "Playing...";
+            
+            // C major scale notes with their positions in the circle:
+            // C (0), D (2), E (4), F (11), G (1), A (3), B (5), C (0)
+            const scaleNotes = [0, 2, 4, 11, 1, 3, 5, 0];
+            let currentNote = 0;
+            
+            function playNextNote() {
+                if (currentNote >= scaleNotes.length) {
+                    demoButton.disabled = false;
+                    demoButton.textContent = "Demo C Major Scale";
+                    return;
+                }
+                
+                playNoteWithVisual(scaleNotes[currentNote]);
+                currentNote++;
+                
+                // Schedule next note
+                setTimeout(playNextNote, 800);
+            }
+            
+            // Start the sequence
+            playNextNote();
+        }
+
+        // Event listeners
+        document.getElementById('wheel').addEventListener('click', (e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const centerX = rect.left + rect.width/2;
+            const centerY = rect.top + rect.height/2;
+            
+            let angle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
+            let degrees = (angle * (180/Math.PI) + 90 + 15) % 360;
+            if (degrees < 0) degrees += 360;
+            
+            const segment = Math.floor(degrees / 30) % 12;
+            playNoteWithVisual(segment);
+        });
+
+        document.getElementById('wheel').addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = e.currentTarget.getBoundingClientRect();
+            const centerX = rect.left + rect.width/2;
+            const centerY = rect.top + rect.height/2;
+            
+            let angle = Math.atan2(touch.clientY - centerY, touch.clientX - centerX);
+            let degrees = (angle * (180/Math.PI) + 90 + 15) % 360;
+            if (degrees < 0) degrees += 360;
+            
+            const segment = Math.floor(degrees / 30) % 12;
+            playNoteWithVisual(segment);
+        });
+
+        document.getElementById('notationSelector').addEventListener('change', (e) => {
+            updateLabels(e.target.value);
+        });
+
+        document.getElementById('demoButton').addEventListener('click', playCMajorScaleDemo);
+
+        // Mobile audio activation
+        document.addEventListener('touchstart', () => {
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }, { once: true });
+
+        // Initialize with sharps
+        updateLabels('sharps');
+    </script>
+</body>
+</html>
